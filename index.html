@@ -156,7 +156,10 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
 };
 const setStatus = t => { $("#status").textContent = t; };
-const setEvents = list => { events = list; store.set(CK, JSON.stringify(list)); };
+const fixDate = s => { s = String(s == null ? "" : s).trim(); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d = new Date(s); return isNaN(d) ? "" : toISO(d); };
+const fixTime = t => { const m = String(t || "").match(/(\d{1,2}):(\d{2})/); return m ? pad(m[1]) + ":" + m[2] : ""; };
+const clean = list => (Array.isArray(list) ? list : []).map(e => ({ ...e, date: fixDate(e.date), time: fixTime(e.time), who: Array.isArray(e.who) ? e.who : [] }));
+const setEvents = list => { events = clean(list); store.set(CK, JSON.stringify(events)); };
 const errText = err => err instanceof TypeError ? "เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง" : err.message;
 
 function demoData() {
@@ -189,7 +192,7 @@ async function load() {
     if (!j.ok) throw new Error();
     setEvents(j.events); setStatus("");
   } catch (e) { setStatus("เชื่อมต่อ Google Sheets ไม่สำเร็จ กด 🔄 เพื่อลองอีกครั้ง"); }
-  render();
+  try { render(); } catch (e) { console.error(e); setStatus("แสดงนัดไม่ได้: " + e.message); }
 }
 
 function whoHtml(names) {
@@ -198,6 +201,8 @@ function whoHtml(names) {
 }
 
 function render() {
+  const bad = events.filter(e => !e.date).length;
+  if (bad) setStatus(`มี ${bad} นัดที่อ่านวันที่ไม่ได้ ตรวจคอลัมน์ date ในชีต (ควรเป็นรูปแบบ 2026-12-04)`);
   const all = events.slice().sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || ""))).filter(e => daysLeft(e.date) >= 0);
 
   const todays = all.filter(e => daysLeft(e.date) === 0);
@@ -270,7 +275,7 @@ form.addEventListener("submit", async ev => {
   btn.disabled = false; btn.textContent = "บันทึกนัด";
 });
 
-if (!DEMO) { try { events = JSON.parse(store.get(CK) || "[]"); } catch (e) {} }
+if (!DEMO) { try { events = clean(JSON.parse(store.get(CK) || "[]")); } catch (e) {} }
 render();
 load();
 </script>
